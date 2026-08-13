@@ -1,31 +1,58 @@
 #!/bin/sh
 #==============================================================================
-#  install-mtg.sh
+#  install-mtg.sh  (remote-executable)
 #
 #  MTG (Telegram MTProto proxy, https://github.com/9seconds/mtg) installer for
 #  a tiny Alpine Linux 3.22 x86_64 box (e.g. NAT VPS with 128MB RAM/disk).
 #
-#  Interactive wizard (port / fake-TLS domain / secret), downloads the prebuilt
-#  static mtg binary, installs an OpenRC service and prints the tg:// link.
+#  Remote one-liner:
+#    curl -fsSL https://raw.githubusercontent.com/LinyuFiee/NAT_Mmtproto/main/install-mtg.sh | sh
+#    wget -qO- https://raw.githubusercontent.com/LinyuFiee/NAT_Mmtproto/main/install-mtg.sh | sh
+#
+#  When run through a pipe (curl | sh), the script downloads itself to /tmp and
+#  re-executes with a real terminal (/dev/tty), so the interactive wizard still
+#  works. When run as a file, it behaves exactly the same.
+#
+#  Interactive wizard (port / public port / fake-TLS domain / secret), downloads
+#  the prebuilt static mtg binary, installs an OpenRC service and prints the
+#  tg:// link. No compiler needed.
 #
 #  NOTE: mtg v2 supports ONLY FakeTLS secrets (starting with "ee" or base64).
-#  Plain hex secrets from MTProxy are rejected. This wizard always produces a
-#  valid FakeTLS secret.
 #
-#  Usage:
+#  Commands:
 #    sh install-mtg.sh                install with interactive wizard
+#    sh install-mtg.sh doctor         diagnose service + Telegram connectivity
 #    sh install-mtg.sh uninstall      stop and remove everything
 #    sh install-mtg.sh help           show usage
 #
-#  Non-interactive env overrides (used when stdin is not a terminal):
-#    PORT=8443               port to bind (default 443)
-#    FAKE_TLS_DOMAIN=x.com   fake-TLS domain used to build the secret
-#    SECRET=<ee...|base64>   explicit valid secret (overrides generation)
-#    DNS="udp://223.5.5.5"   DNS resolver for mtg (default: mtg's https://1.1.1.1)
-#    MTG_VERSION=v2.2.8      mtg release to download
-#    MTG_SHA256=<hash>       expected sha256 of the linux-amd64 tarball
-#    KEEP_CONFIG=1           keep /etc/mtg on uninstall
+#  Non-interactive env overrides:
+#    PORT, PUBLIC_PORT, FAKE_TLS_DOMAIN, SECRET, DNS, MTG_VERSION, MTG_SHA256, KEEP_CONFIG
 #==============================================================================
+
+#----------------------------------------------------------------- remote bootstrap
+INSTALL_URL="https://raw.githubusercontent.com/LinyuFiee/NAT_Mmtproto/main/install-mtg.sh"
+
+if [ ! -t 0 ] && [ "${INSTALL_BOOTSTRAPPED:-0}" != "1" ]; then
+    _tmp="/tmp/install-mtg.$$"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$INSTALL_URL" -o "$_tmp" 2>/dev/null || exit 1
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q -O "$_tmp" "$INSTALL_URL" 2>/dev/null || exit 1
+    else
+        echo "install-mtg.sh: curl or wget is required" >&2
+        exit 1
+    fi
+    chmod 755 "$_tmp"
+    INSTALL_BOOTSTRAPPED=1
+    export INSTALL_BOOTSTRAPPED
+    if [ -r /dev/tty ]; then
+        exec "$_tmp" "$@" < /dev/tty
+    else
+        exec "$_tmp" "$@"
+    fi
+fi
+#----------------------------------------------------------------- end bootstrap
+
 set -eu
 
 #----------------------------------------------------------------- settings
@@ -64,6 +91,25 @@ ok()   { printf '%b[ %b+%b ]%b %s\n' "$G" "$G" "$G" "$R" "$*"; }
 warn() { printf '%b[ %b!%b ]%b %s\n' "$Y" "$Y" "$Y" "$R" "$*"; }
 err()  { printf '%b[ %bX%b ]%b %s\n' "$R" "$R" "$R" "$R" "$*" >&2; }
 die()  { err "$*"; exit 1; }
+
+usage() {
+    cat <<'EOF'
+用法: sh install-mtg.sh [install|doctor|uninstall|help]
+
+命令:
+  install     安装 / 重装（默认，交互式向导）
+  doctor      诊断服务与 Telegram 连通性
+  uninstall   卸载（KEEP_CONFIG=1 保留配置）
+  help        显示帮助
+
+远程执行（自动下载并交互）:
+  curl -fsSL https://raw.githubusercontent.com/LinyuFiee/NAT_Mmtproto/main/install-mtg.sh | sh
+
+环境变量（非交互模式）:
+  PORT=8533 FAKE_TLS_DOMAIN=www.bing.com sh install-mtg.sh
+  PUBLIC_PORT、SECRET、DNS、MTG_VERSION、MTG_SHA256、KEEP_CONFIG
+EOF
+}
 
 hline() {
     n="${1:-58}"
@@ -535,9 +581,7 @@ case "${1:-install}" in
     install|reinstall) install_all ;;
     uninstall)         uninstall ;;
     doctor|status)     doctor ;;
-    help|--help|-h)
-        sed -n '2,44p' "$0" | sed 's/^# \{0,1\}//'
-        ;;
+    help|--help|-h)  usage ;;
     *)
         err "未知命令：$1"
         exit 1

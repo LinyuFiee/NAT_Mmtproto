@@ -16,11 +16,21 @@
 
 ## 快速开始
 
-将脚本传到小鸡后，以 root 运行：
+**远程执行（推荐）：**
 
 ```sh
-sh install-mtg.sh
+curl -fsSL https://raw.githubusercontent.com/LinyuFiee/NAT_Mmtproto/main/install-mtg.sh | sh
 ```
+
+或：
+
+```sh
+wget -qO- https://raw.githubusercontent.com/LinyuFiee/NAT_Mmtproto/main/install-mtg.sh | sh
+```
+
+> 通过管道执行时，脚本会自动把自己下载到 `/tmp` 并用真实终端（`/dev/tty`）重新运行，因此交互式向导依然可用；如果确实没有终端（如 cron），则自动走非交互模式。
+
+**本地执行：** 将脚本传到小鸡后以 root 运行 `sh install-mtg.sh`。
 
 脚本会自动：
 1. 清理残留的编译工具链（`build-base`/`g++` 等，防止占满磁盘）
@@ -95,6 +105,8 @@ sh install-mtg.sh doctor             # 诊断
 sh install-mtg.sh uninstall          # 卸载（KEEP_CONFIG=1 保留配置）
 sh install-mtg.sh help               # 帮助
 ```
+
+远程执行时传参：`curl -fsSL URL | sh -s doctor`（传 `uninstall` 等同理）。
 
 非交互式安装（cron/脚本用）：
 
